@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS controle_versoes (
+    id SERIAL PRIMARY KEY,
+    versao VARCHAR(50) UNIQUE NOT NULL,
+    aplicado_em TIMESTAMP DEFAULT NOW()
+);
