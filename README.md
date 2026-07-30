@@ -1,4 +1,5 @@
 # DB Postgres
+teste
 
 Template para banco PostgreSQL versionado por arquivos SQL locais.
 
