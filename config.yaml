@@ -11,5 +11,8 @@ database:
   owner:
     user: ${POSTGRES_USER} # usuario principal do banco
     password: ${POSTGRES_PASSWORD} # senha do usuario principal
-  migrations_path: migrations # pasta com os scripts SQL
-  control_table: controle_versoes # tabela que registra versoes aplicadas
+  sql_path: sql # pasta com os arquivos SQL
+  version_table: controle_versoes # tabela especial de versionamento
+  version_schema_file: versionamento.sql # SQL base da tabela de versionamento
+  execution_order: # ordem real de execucao dos arquivos SQL
+    - versionamento.sql

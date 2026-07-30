@@ -1,93 +1,68 @@
 # DB Postgres
 
-Template para banco PostgreSQL versionado com migracoes SQL em GitHub.
+Template para banco PostgreSQL versionado por arquivos SQL locais.
 
-O foco e manter a estrutura pronta para DB as code:
-- migracoes numeradas por versao
-- controle de execucao no banco
-- criacao automatica do banco quando necessario
-- configuracao separada entre `config.yaml` e `.env`
+O diretorio `sql/` guarda os arquivos SQL. A ordem de execucao fica em `config.yaml`. O Python so orquestra: garante banco e role, executa os SQL e grava a versao atual do banco com commit e comentario.
 
-## Como Funciona
-
-1. O `scripts/migrate.py` carrega as variaveis do `.env`
-2. O script le o `config.yaml` para saber banco, usuario e tabela de controle
-3. Se o banco nao existir, ele conecta com o usuario admin e cria o banco
-4. As migracoes sao buscadas em `migrations/`
-5. O fluxo aplica apenas o que ainda nao foi registrado em `controle_versoes`
-
-## Estrutura
-
-- `migrations/`: scripts SQL numerados no formato `V1__descricao.sql`
-- `scripts/migrate.py`: ponto de entrada da migracao
-- `config.yaml`: configuracao do ambiente e credenciais organizadas
-- `.env.example`: variaveis sensiveis de exemplo
-- `requirements.txt`: dependencias Python
-
-## Arquivos
-
-### `config.yaml`
-
-Define:
-- nome do projeto
-- host e porta do PostgreSQL
-- nome do banco
-- usuario e senha da aplicacao
-- usuario e senha admin para criacao do banco
-- pasta de migracoes
-- nome da tabela de controle
-
-### `.env`
-
-Copie o exemplo e ajuste os valores reais:
-
-```bash
-cp .env.example .env
-```
-
-## Variaveis
-
-- `POSTGRES_HOST`: host do servidor PostgreSQL
-- `POSTGRES_PORT`: porta do servidor PostgreSQL
-- `POSTGRES_DB`: nome do banco da aplicacao
-- `POSTGRES_USER`: usuario dono do banco
-- `POSTGRES_PASSWORD`: senha do usuario dono do banco
-- `POSTGRES_ADMIN_USER`: usuario com permissao para criar banco
-- `POSTGRES_ADMIN_PASSWORD`: senha do usuario admin
-
-## Regras
-
-- apenas DDL
-- scripts idempotentes
-- execucao sequencial por versao
-- transacao por arquivo
-- sem commitar segredos
+O script e Python puro. Roda do mesmo jeito em Windows e Linux, sem depender de bash.
 
 ## Uso
 
+Linux:
+
 ```bash
-python scripts/migrate.py
+cp .env.example .env
+pip install -r requirements.txt
+python scripts/apply_sql.py
 ```
 
-## Exemplo de migracao
+Windows:
+
+```powershell
+Copy-Item .env.example .env
+pip install -r requirements.txt
+python scripts\apply_sql.py
+```
+
+## Como funciona
+
+1. `scripts/apply_sql.py` carrega `.env` e `config.yaml`.
+2. Se faltar, cria usuario e banco usando `POSTGRES_ROOT_DB` e `POSTGRES_ROOT_USER`.
+3. Executa os SQL na ordem definida em `database.execution_order`.
+4. Usa `database.version_schema_file` para garantir a tabela de versionamento.
+5. Grava `versao`, `commit_id`, `comentario_commit` e `aplicado_em`.
+6. Toda execucao gera uma nova linha de versao.
+
+## Configuracao
+
+```yaml
+database:
+  sql_path: sql
+  version_table: controle_versoes
+  version_schema_file: versionamento.sql
+  execution_order:
+    - versionamento.sql
+```
+
+## Query da versao atual
 
 ```sql
-CREATE TABLE IF NOT EXISTS usuarios (
-    id SERIAL PRIMARY KEY,
-    nome VARCHAR(120) NOT NULL
-);
+SELECT versao, commit_id, comentario_commit, aplicado_em
+FROM controle_versoes
+ORDER BY versao DESC
+LIMIT 1;
 ```
 
-## Estrutura Esperada
+## Estrutura esperada
 
 ```text
 db-postgres/
-├── migrations/
-│   └── V1__init.sql
-├── scripts/
-│   └── migrate.py
-├── config.yaml
-├── .env.example
-├── .env
-└── requirements.txt
+|- sql/
+|  |- versionamento.sql
+|- scripts/
+|  |- apply_sql.py
+|- config.yaml
+|- .env.example
+|- .env
+`- requirements.txt
 ```
