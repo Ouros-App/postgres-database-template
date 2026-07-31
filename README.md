@@ -51,8 +51,8 @@ A pipeline `Apply SQL On Main` nao usa `.env`. Os valores abaixo devem existir e
 1. `scripts/apply_sql.py` carrega `.env` e `config.yaml`.
 2. No GitHub Actions, as mesmas variaveis vem dos secrets do repositorio.
 3. Se faltar, cria usuario e banco usando `POSTGRES_ROOT_DB` e `POSTGRES_ROOT_USER`.
-4. Executa os SQL na ordem definida em `database.execution_order`.
-5. Usa `database.version_schema_file` para garantir a tabela de versionamento.
+4. Usa `database.version_schema_file` para garantir a tabela de versionamento.
+5. Executa os SQL na ordem definida em `database.execution_order`.
 6. Grava `versao`, `commit_id`, `comentario_commit` e `aplicado_em`.
 7. Toda execucao gera uma nova linha de versao.
 
@@ -64,7 +64,8 @@ database:
   version_table: controle_versoes
   version_schema_file: versionamento.sql
   execution_order:
-    - versionamento.sql
+    - file: atualiza_controle_versoes_identity.sql
+      mode: once
 ```
 
 ## Query da versao atual
