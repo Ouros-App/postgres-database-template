@@ -14,5 +14,4 @@ database:
   sql_path: sql # pasta com os arquivos SQL
   version_table: controle_versoes # tabela especial de versionamento
   version_schema_file: versionamento.sql # SQL base da tabela de versionamento
-  execution_order: # ordem real de execucao dos arquivos SQL
-    - versionamento.sql
+  execution_order: [] # adicione scripts SQL e seus modos conforme necessario
