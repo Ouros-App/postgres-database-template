@@ -27,8 +27,7 @@ class ApplySqlTest(unittest.TestCase):
                         "  sql_path: sql",
                         "  version_table: controle_versoes",
                         "  version_schema_file: versionamento.sql",
-                        "  execution_order:",
-                        "    - versionamento.sql",
+                        "  execution_order: []",
                     ]
                 ),
                 encoding="utf-8",
@@ -48,7 +47,7 @@ class ApplySqlTest(unittest.TestCase):
             cfg = load_config(root)
             self.assertEqual(cfg["database"]["sql_path"], "sql")
             self.assertEqual(cfg["database"]["version_schema_file"], "versionamento.sql")
-            self.assertEqual(cfg["database"]["execution_order"], ["versionamento.sql"])
+            self.assertEqual(cfg["database"]["execution_order"], [])
 
 
 if __name__ == "__main__":
