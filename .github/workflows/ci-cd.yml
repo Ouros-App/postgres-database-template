@@ -8,21 +8,13 @@ on:
   push:
     branches:
       - main
+
 permissions:
   actions: read
   contents: read
-  checks: write
-  issues: write
   pull-requests: read
+
 jobs:
-
-  workflow-sync:
-    name: workflow-sync
-    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Workflow synchronized on a non-main branch."
-
   conventional-commits-warning:
     name: conventional-commits-warning
     runs-on: ubuntu-latest
@@ -45,59 +37,103 @@ jobs:
             const pattern = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|deps)(\([A-Za-z0-9_.-]+\))?(!)?: .+/;
             const invalid = [];
             if (!pattern.test(process.env.PR_TITLE)) invalid.push(`PR title: ${process.env.PR_TITLE}`);
-            const range = `${process.env.BASE_SHA}..${process.env.HEAD_SHA}`;
-            const subjects = execFileSync("git", ["log", "--no-merges", "--format=%s", range], { encoding: "utf8" })
-              .split(/\r?\n/).filter(Boolean);
-            for (const subject of subjects) {
-              if (!pattern.test(subject)) invalid.push(`Commit: ${subject}`);
-            }
+            const subjects = execFileSync("git", ["log", "--no-merges", "--format=%s", `${process.env.BASE_SHA}..${process.env.HEAD_SHA}`], { encoding: "utf8" }).split(/\r?\n/).filter(Boolean);
+            for (const subject of subjects) if (!pattern.test(subject)) invalid.push(`Commit: ${subject}`);
             const marker = "<!-- conventional-commits-warning -->";
             const valid = invalid.length === 0;
-            const summary = valid
-              ? "PR title and commit messages follow Conventional Commits."
-              : `The PR remains mergeable, but these messages do not follow Conventional Commits:\n\n${invalid.map(item => `- ${item}`).join("\n")}`;
+            const summary = valid ? "PR title and commit messages follow Conventional Commits." : `The PR remains mergeable, but these messages do not follow Conventional Commits:\n\n${invalid.map(item => `- ${item}`).join("\n")}`;
+            try { await github.rest.checks.create({ owner: context.repo.owner, repo: context.repo.repo, name: "conventional-commits", head_sha: process.env.HEAD_SHA, status: "completed", conclusion: valid ? "success" : "neutral", output: { title: valid ? "Conventional Commits" : "Conventional Commits warning", summary } }); } catch (error) { core.warning(`Could not publish the Conventional Commits check: ${error.message}`); }
             try {
-              await github.rest.checks.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                name: "conventional-commits",
-                head_sha: process.env.HEAD_SHA,
-                status: "completed",
-                conclusion: valid ? "success" : "neutral",
-                output: { title: valid ? "Conventional Commits" : "Conventional Commits warning", summary },
-              });
-            } catch (error) {
-              core.warning(`Could not publish the Conventional Commits check: ${error.message}`);
-            }
-            try {
-              const comments = await github.paginate(github.rest.issues.listComments, {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                per_page: 100,
-              });
+              const comments = await github.paginate(github.rest.issues.listComments, { owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, per_page: 100 });
               const existing = comments.find(comment => comment.user?.type === "Bot" && comment.body?.includes(marker));
-              if (invalid.length) {
-                const body = `${marker}\n **Conventional Commits:** aviso no bloqueante.\n\n${summary}\n\nO CI funcional continua sendo validado normalmente.`;
-                if (existing) {
-                  await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body });
-                } else {
-                  await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
-                }
-              } else if (existing) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: existing.id,
-                  body: `${marker}\n **Conventional Commits:** aviso resolvido; o ttulo e os commits esto no padro.`,
-                });
-              }
-            } catch (error) {
-              core.warning(`Could not publish the Conventional Commits comment: ${error.message}`);
-            }
+              if (invalid.length) { const body = `${marker}\n **Conventional Commits:** aviso n\u00e3o bloqueante.\n\n${summary}\n\nO CI funcional continua sendo validado normalmente.`; if (existing) await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body }); else await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body }); }
+              else if (existing) await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body: `${marker}\n **Conventional Commits:** aviso resolvido; o t\u00edtulo e os commits est\u00e3o no padr\u00e3o.` });
+            } catch (error) { core.warning(`Could not publish the Conventional Commits comment: ${error.message}`); }
 
   ci:
     name: ci
     runs-on: ubuntu-latest
-    if: (github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'rerun-ci') && (github.event_name != 'push' || github.ref == 'refs/heads/main')
-# Workflow sync marker
+    if: github.event.action != 'labeled' || github.event.label.name == 'rerun-ci'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Validate scaffold
+        run: |
+          test -f README.md
+          test -f config.yaml
+          test -f requirements.txt
+          test -f scripts/apply_sql.py
+          test -f sql/versionamento.sql
+
+      - name: Test runner
+        run: |
+          python -m py_compile scripts/apply_sql.py
+          python -m unittest discover -s tests -v
+
+  sql:
+    name: sql
+    runs-on: ubuntu-latest
+    needs: ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Validate migration naming
+        run: |
+          find sql -type f -name '*.sql' | sort | grep -q .
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          import yaml
+
+          root = Path.cwd()
+          db = yaml.safe_load((root / "config.yaml").read_text(encoding="utf-8"))["database"]
+          sql_dir = root / db["sql_path"]
+          names = [db["version_schema_file"]]
+          for item in db.get("execution_order", []):
+              name = item if isinstance(item, str) else item.get("file") if isinstance(item, dict) else None
+              if not isinstance(name, str):
+                  sys.exit("Invalid SQL file in execution_order")
+              names.append(name)
+          for name in names:
+              path = Path(name)
+              target = sql_dir / path
+              if path.is_absolute() or ".." in path.parts or path.suffix != ".sql" or not target.is_file():
+                  sys.exit(f"Invalid SQL file: {name}")
+          PY
+
+      - name: Block destructive SQL
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          pattern = re.compile(r"\b(TRUNCATE|DROP\s+(DATABASE|TABLE|SCHEMA))\b", re.I)
+          for path in Path("sql").rglob("*.sql"):
+              sql = path.read_text(encoding="utf-8")
+              sql = re.sub(r"/\*.*?\*/|--[^\n]*", " ", sql, flags=re.S)
+              if pattern.search(sql):
+                  sys.exit("Destructive SQL is forbidden")
+          PY
