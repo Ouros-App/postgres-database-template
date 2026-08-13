@@ -176,3 +176,4 @@ jobs:
               if pattern.search(sql):
                   sys.exit("Destructive SQL is forbidden")
           PY
+# PR workflow validation
